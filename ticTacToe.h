@@ -1,6 +1,7 @@
 #include <stdbool.h>
+#include <mosquitto.h>
 
-/** 
+/**
  *  Returns true if there's moves remaining on the board.
  *  False if there's no more moves to play.
  */
@@ -32,6 +33,14 @@ int diagonalCrossed(char[][3]);
 
 /** Checks if the game is over */
 int gameOver(char[][3]);
+
+/* START MQTT FOR ESP32 */
+/** Defines how to act upon connection */
+static void on_connect(struct mosquitto *, void *, int);
+
+/** Defines how to act when a message is published on a topic */
+static void on_message(struct mosquitto *, void *, const struct mosquitto_message *);
+/* END MQTT FOR ESP32 */
 
 /** Starts the game */
 void playTicTacToe(int);
