@@ -40,6 +40,12 @@ static void on_connect(struct mosquitto *, void *, int);
 
 /** Defines how to act when a message is published on a topic */
 static void on_message(struct mosquitto *, void *, const struct mosquitto_message *);
+
+/** Send status to ESP32 */
+void sendStatus(const char *);
+
+/** Send available spaces to ESP32 */
+void sendAvailSpaces(const char *);
 /* END MQTT FOR ESP32 */
 
 /** Starts the game */
