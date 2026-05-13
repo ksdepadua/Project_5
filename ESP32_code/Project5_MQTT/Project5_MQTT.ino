@@ -35,6 +35,23 @@ const int mqtt_port = 1883;
 WiFiClient wifiClient;
 PubSubClient mqttClient(mqtt_server_ip, mqtt_port, wifiClient); // Creates an MQTT client using WiFi // PubSubClient MQTTclient(mqtt_server, mqtt_port, wifiClient);
 
+// Global state for scrolling
+unsigned long lastScroll = 0;
+int scrollPos = 0;
+char currentLine0[128] = {0};
+char currentLine1[128] = {0};
+bool isScrolling = false;
+
+#define LCD_COLS 16
+#define SCROLL_PAD 16
+
+unsigned long lastReconnectAttempt = 0;
+
+char lastStatus[128] = {0};
+char lastAvailSpaces[128] = {0};
+
+bool gameStarted = false;
+
 void connectToWifi() {
   Serial.println("\nConnecting to WiFi...");
   WiFi.mode(WIFI_STA);
@@ -50,37 +67,100 @@ void connectToWifi() {
   Serial.println(WiFi.localIP());
 }
 
+void setLine(int row, const char* message) {
+    char* target = (row == 0) ? currentLine0 : currentLine1;
+    // Build padded string: 16 spaces + message + 16 spaces
+    snprintf(target, 128, "                %s                ", message);
+    scrollPos = 0;
+}
+
+void printStatus(const char* message) {
+    char buf[96];
+    snprintf(buf, sizeof(buf), "Status: %s", message);
+    setLine(0, buf);
+}
+
+void printAvailSpaces(const char* message) {
+    char buf[96];
+    snprintf(buf, sizeof(buf), "Avail: %s", message);
+    setLine(1, buf);
+}
+
 // Handling incoming MQTT messages
 void mqttCallback(char* topic, byte* payload, unsigned int length) {
-  String incomingMessage = "";
+    char incomingMessage[128] = {0};
+    if (length >= sizeof(incomingMessage)) length = sizeof(incomingMessage) - 1;
+    memcpy(incomingMessage, payload, length);
 
-  // Convert incoming byte array to String
-  for (unsigned int i = 0; i < length; i++) {
-    incomingMessage += (char)payload[i];
-  }
+    if (strcmp(topic, "statusOutput") == 0) {
+        if (strcmp(incomingMessage, lastStatus) == 0) return;
+        strncpy(lastStatus, incomingMessage, sizeof(lastStatus) - 1);
+        gameStarted = true;
 
-  incomingMessage.trim(); // Removes trailing whitespace/newline
+        Serial.print("Topic: statusOutput, Message: ");
+        Serial.println(incomingMessage);
 
-  // ...
+        //printStatus(incomingMessage);
+    }
+    else if (strcmp(topic, "availSpacesOutput") == 0) {
+        if (strcmp(incomingMessage, lastAvailSpaces) == 0) return;
+        strncpy(lastAvailSpaces, incomingMessage, sizeof(lastAvailSpaces) - 1);
+        gameStarted = true;
+
+        Serial.print("Topic: availSpacesOutput, Message: ");
+        Serial.println(incomingMessage);
+
+        //printAvailSpaces(incomingMessage);
+    }
+}
+
+void lcdPrint(int row, const char* text, int start) {
+    char slice[17] = {0};
+    int len = strlen(text);
+    for (int i = 0; i < 16; i++) {
+        slice[i] = (start + i < len) ? text[start + i] : ' ';
+    }
+    slice[16] = '\0';
+    lcd.setCursor(0, row);
+    lcd.print(slice);
+}
+
+void scrollText() {
+    if (!gameStarted) return;
+    if (isScrolling) return;
+
+    if (millis() - lastScroll >= 1000) {
+        isScrolling = true;
+        lastScroll = millis();
+
+        int len = strlen(currentLine0);
+        if (scrollPos >= len) scrollPos = 0;
+
+        lcdPrint(0, currentLine0, scrollPos);
+        lcdPrint(1, currentLine1, scrollPos);
+
+        scrollPos++;
+        isScrolling = false;
+    }
 }
 
 // Reconnect to MQTT Broker
 void reconnectToMQTT() {
-  while(!mqttClient.connected()) {
-    Serial.print("Connecting to MQTT Client...");
+    if (mqttClient.connected()) return;
+    
+    unsigned long now = millis();
+    if (now - lastReconnectAttempt < 5000) return; // don't retry too fast
+    lastReconnectAttempt = now;
 
-    // Attempt to connect with a client ID
-    if(mqttClient.connect("ESP32_S3_Client")) {
-      Serial.println("Connected to MQTT broker!");
+    Serial.print("Connecting to MQTT...");
+    if (mqttClient.connect("ESP32_S3_Client")) {
+        Serial.println("Connected!");
+        mqttClient.subscribe("statusOutput");
+        mqttClient.subscribe("availSpacesOutput");
+    } else {
+        Serial.print("Failed, state: ");
+        Serial.println(mqttClient.state());
     }
-
-    else {
-      Serial.print("Failed with state ");
-      Serial.print(mqttClient.state());
-      Serial.println(", Retrying in 5 seconds...");
-      delay(5000);
-    }
-  }
 }
 
 // the setup function runs once when you press reset or power the board
@@ -91,32 +171,37 @@ void setup() {
 
   connectToWifi();
   mqttClient.setServer(mqtt_server_ip, mqtt_port);  // Set MQTT Broker
-  //mqttClient.setCallback(mqttCallback); // Set callback function
+  mqttClient.setKeepAlive(60); // Keeps connection alive for 60 seconds
+  mqttClient.setCallback(mqttCallback); // Set callback function
 
   Wire.begin(SDA, SCL);
-  if(!i2CAddrTest(0x27)) {
-    lcd = LiquidCrystal_I2C(0x3F, 16, 2);
-  }
-  lcd.init();
-  lcd.backlight();
-  lcd.setCursor(0,0);
-  lcd.print("Hello, World!");
+  pinMode(13, INPUT_PULLUP);
+  pinMode(14, INPUT_PULLUP);
+  //if(!i2CAddrTest(0x27)) {
+  //  lcd = LiquidCrystal_I2C(0x3F, 16, 2);
+  //}
+  //lcd.init();
+  //lcd.backlight();
+  //lcd.clear();
+  delay(100);
 }
 
 // the loop function runs over and over again forever...
 void loop() {
-  if(!mqttClient.connected()) {
-    reconnectToMQTT();
-  }
+    reconnectToMQTT(); // handles connection check internally
 
-  char keyPressed = myKeypad.getKey();
-  if(keyPressed) {
-    mqttClient.publish("keypadInput", (const char *) &keyPressed);
-  }
+    mqttClient.loop();
+    //scrollText();
+
+    char keyPressed = myKeypad.getKey();
+    if (keyPressed) {
+        mqttClient.publish("keypadInput", (const byte *) &keyPressed, 1);
+    }
 }
 
 bool i2CAddrTest(uint8_t addr) {
-  Wire.begin();
+  Wire.begin(SDA, SCL);
+  Wire.setClock(50000); // 100kHz instead of default 400kHz
   Wire.beginTransmission(addr);
   if (Wire.endTransmission() == 0) {
     return true;
