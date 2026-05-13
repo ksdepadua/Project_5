@@ -20,7 +20,9 @@
 
 struct mosquitto *mosq = NULL;
 volatile int received = 0; // Flag, Set to 1 when message is received
-int esp32input; // Stores payload
+int player2Input; // Stores payload
+
+char player2Source[32];
 
 struct Move {
     int row, col;
@@ -173,7 +175,11 @@ int diagonalCrossed(char board[][NUM_SIDES])
 int promptGameMode() {
     int input;
     printf("Would you like to play Single-Player (1) or Multi-Player (2) Mode? ");
-    scanf("%d", &input);
+    do {
+    	scanf("%d", &input);
+	if(input == 1 || input == 2) { break; }
+	printf("Invalid input. Try again (1 or 2): ");
+    } while(input != 1 || input != 2);
     return input;
 }
 
@@ -207,14 +213,14 @@ static void on_connect(struct mosquitto *mosq, void *userdata, int rc)
         exit(-1);
     }
 
-    mosquitto_subscribe(mosq, NULL, "keypadInput", 0);
+    mosquitto_subscribe(mosq, NULL, player2Source, 0);
 }
 
 static void on_message(struct mosquitto *mosq, void *userdata, const struct mosquitto_message *msg) {
     char *payload = (char *)msg->payload;
     printf("%s\n", payload);
 
-    esp32input = payload[0] - '0';
+    player2Input = payload[0] - '0';
     received = 1;
 }
 
@@ -251,6 +257,12 @@ void playTicTacToe(int whoseTurn)
     showInstructions();
 
     int moveIndex = 0, x, y;
+
+    // Prompt for game mode to see where to connect first...
+    int gameMode = promptGameMode();
+    if(gameMode == 1) { strcpy(player2Source, "bashInput"); }
+    else { strcpy(player2Source, "keypadInput"); }
+
     mosquitto_lib_init();
     mosq = mosquitto_new("esp32", true, NULL);
     mosquitto_connect_callback_set(mosq, on_connect);
@@ -310,11 +322,11 @@ void playTicTacToe(int whoseTurn)
 	    int move;
             printf("Enter your move Player 2 (1-9): ");
 
-	    // Wait for message to be published by ESP32
+	    // Wait for message to be published
 	    while(!received)
 	        usleep(10000);
 
-	    move = esp32input;
+	    move = player2Input;
 	    received = 0; // reset flag
 
             if (move < 1 || move > 9) {
@@ -356,7 +368,7 @@ void playTicTacToe(int whoseTurn)
         // Toggling the user to declare the actual winner
         if (whoseTurn == PLAYER2)
             whoseTurn = PLAYER1;
-        else if (whoseTurn == PLAYER2)
+        else if (whoseTurn == PLAYER1)
             whoseTurn = PLAYER2;
 
         // Declare the winner
