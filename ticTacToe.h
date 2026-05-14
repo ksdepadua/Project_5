@@ -55,6 +55,9 @@ void sendAvailSpaces(const char *);
 
 /** Sends what space the players have selected per turn */
 void sendPlayersTurn(const int, const int);
+
+/** Cleans up everything once program is done */
+void cleanupMQTT();
 /* END MQTT FOR ESP32 */
 
 /** Starts the game */
