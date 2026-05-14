@@ -31,8 +31,14 @@ int columnCrossed(char[][3]);
 /** Checks if any diagonal is crossed with the same player's move */
 int diagonalCrossed(char[][3]);
 
+/** Prompt users if they want to play single- or multiplayer mode */
+int promptGameMode();
+
 /** Checks if the game is over */
 int gameOver(char[][3]);
+
+/** Stores available spaces into a string */
+void getAvailSpaces(const char[][3], char *);
 
 /* START MQTT FOR ESP32 */
 /** Defines how to act upon connection */
@@ -46,6 +52,9 @@ void sendStatus(const char *);
 
 /** Send available spaces to ESP32 */
 void sendAvailSpaces(const char *);
+
+/** Sends what space the players have selected per turn */
+void sendPlayersTurn(const int, const int);
 /* END MQTT FOR ESP32 */
 
 /** Starts the game */
