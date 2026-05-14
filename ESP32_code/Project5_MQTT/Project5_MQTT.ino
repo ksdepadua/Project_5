@@ -100,7 +100,7 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
         Serial.print("Topic: statusOutput, Message: ");
         Serial.println(incomingMessage);
 
-        //printStatus(incomingMessage);
+        printStatus(incomingMessage);
     }
     else if (strcmp(topic, "availSpacesOutput") == 0) {
         if (strcmp(incomingMessage, lastAvailSpaces) == 0) return;
@@ -110,7 +110,7 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
         Serial.print("Topic: availSpacesOutput, Message: ");
         Serial.println(incomingMessage);
 
-        //printAvailSpaces(incomingMessage);
+        printAvailSpaces(incomingMessage);
     }
 }
 
@@ -129,7 +129,7 @@ void scrollText() {
     if (!gameStarted) return;
     if (isScrolling) return;
 
-    if (millis() - lastScroll >= 1000) {
+    if (millis() - lastScroll >= 500) {
         isScrolling = true;
         lastScroll = millis();
 
@@ -183,7 +183,7 @@ void setup() {
   //lcd.init();
   //lcd.backlight();
   //lcd.clear();
-  delay(100);
+  //delay(100);
 }
 
 // the loop function runs over and over again forever...
