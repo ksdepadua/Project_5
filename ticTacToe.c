@@ -128,11 +128,11 @@ void initialize(char board[][NUM_SIDES], int moves[])
 void declareWinner(int whoseTurn)
 {
     if (whoseTurn == PLAYER2) {
-	sendStatus(PLAYER2WINSTATUS);
+        sendStatus(PLAYER2WINSTATUS);
         printf("Player 2 has won\n");
     }
     else {
-	sendStatus(PLAYER1WINSTATUS);
+        sendStatus(PLAYER1WINSTATUS);
         printf("Player 1 has won\n");
     }
 }
@@ -176,9 +176,9 @@ int promptGameMode() {
     int input;
     printf("Would you like to play Single-Player (1) or Multi-Player (2) Mode? ");
     do {
-    	scanf("%d", &input);
-	if(input == 1 || input == 2) { break; }
-	printf("Invalid input. Try again (1 or 2): ");
+        scanf("%d", &input);
+        if(input == 1 || input == 2) { break; }
+        printf("Invalid input. Try again (1 or 2): ");
     } while(input != 1 || input != 2);
     return input;
 }
@@ -194,11 +194,11 @@ void getAvailSpaces(const char board[][NUM_SIDES], char *availSpaces) {
 
     int j = 0;
     for(int i = 0; i < 9; i++) {
-	int row = i / 3, col = i % 3;
-	    if (board[row][col] == ' ') {
-    	        spaces[j] = '0' + (i + 1);        // store as ASCII digit
-    	        j++;
-	    }
+        int row = i / 3, col = i % 3;
+            if (board[row][col] == ' ') {
+                spaces[j] = '0' + (i + 1);        // store as ASCII digit
+                j++;
+            }
     }
 
     spaces[j] = '\0'; // null terminate
@@ -240,6 +240,18 @@ void sendAvailSpaces(const char* spaces) {
     mssg[j] = '\0';
     mosquitto_publish(mosq, NULL, "availSpacesOutput", strlen(mssg), mssg, 0, false);
 }
+
+void sendPlayersTurn(const int player, const int turn) {
+    char move[8];
+    snprintf(move, sizeof(move), "%d", turn);
+
+    if(player == 1) {
+        mosquitto_publish(mosq, NULL, "player1Move", strlen(move), move, 0, false);
+    }
+    else if(player == 2) {
+        mosquitto_publish(mosq, NULL, "player2Move", strlen(move), move, 0, false);
+    }
+}
 /* END MQTT FOR ESP32*/
 
 void playTicTacToe(int whoseTurn)
@@ -278,14 +290,15 @@ void playTicTacToe(int whoseTurn)
     // Keep playing until the game is over or it is a draw
     while (!gameOver(board) && moveIndex != NUM_SIDES * NUM_SIDES) {
         if (whoseTurn == PLAYER1) {
-	    sendStatus(PLAYER1TURNSTATUS);
+            sendStatus(PLAYER1TURNSTATUS);
             memset(availSpaces, 0, sizeof(availSpaces));
-	    getAvailSpaces(board, availSpaces);
-	    sendAvailSpaces(availSpaces);
+            getAvailSpaces(board, availSpaces);
+            sendAvailSpaces(availSpaces);
 
             int move;
             printf("Enter your move Player 1 (1-9): ");
             scanf("%d", &move);
+            sendPlayersTurn(1, move);
             if (move < 1 || move > 9) {
                 printf("Invalid input! Please enter a "
                        "number between 1 and 9.\n");
@@ -298,13 +311,13 @@ void playTicTacToe(int whoseTurn)
                 showBoard(board);
                 moveIndex++;
                 if (gameOver(board)) {
-		    //mosquitto_destroy(mosq);
-		    //mosquitto_lib_cleanup();
-		    declareWinner(PLAYER1);
+                    //mosquitto_destroy(mosq);
+                    //mosquitto_lib_cleanup();
+                    declareWinner(PLAYER1);
                     return;
                 }
 
-		// End turn
+                // End turn
                 whoseTurn = PLAYER2;
             }
             else {
@@ -316,18 +329,19 @@ void playTicTacToe(int whoseTurn)
         else if (whoseTurn == PLAYER2) {
             sendStatus(PLAYER2TURNSTATUS);
             memset(availSpaces, 0, sizeof(availSpaces));
-	    getAvailSpaces(board, availSpaces);
-	    sendAvailSpaces(availSpaces);
+            getAvailSpaces(board, availSpaces);
+            sendAvailSpaces(availSpaces);
 
-	    int move;
+            int move;
             printf("Enter your move Player 2 (1-9): ");
 
-	    // Wait for message to be published
-	    while(!received)
-	        usleep(10000);
+            // Wait for message to be published
+            while(!received)
+                usleep(10000);
 
-	    move = player2Input;
-	    received = 0; // reset flag
+            move = player2Input;
+            sendPlayersTurn(2, move);
+            received = 0; // reset flag
 
             if (move < 1 || move > 9) {
                 printf("Invalid input! Please enter a "
@@ -341,8 +355,8 @@ void playTicTacToe(int whoseTurn)
                 showBoard(board);
                 moveIndex++;
                 if (gameOver(board)) {
-		    //mosquitto_loop_stop(mosq, true);
-		    //mosquitto_destroy(mosq);
+                    //mosquitto_loop_stop(mosq, true);
+                    //mosquitto_destroy(mosq);
                     //mosquitto_lib_cleanup();
                     declareWinner(PLAYER2);
                     return;
@@ -361,8 +375,8 @@ void playTicTacToe(int whoseTurn)
     if (!gameOver(board) && moveIndex == NUM_SIDES * NUM_SIDES) {
         //mosquitto_destroy(mosq);
         //mosquitto_lib_cleanup();
-	sendStatus(DRAWSTATUS);
-	printf("It's a draw\n");
+        sendStatus(DRAWSTATUS);
+        printf("It's a draw\n");
     }
     else {
         // Toggling the user to declare the actual winner
@@ -372,9 +386,9 @@ void playTicTacToe(int whoseTurn)
             whoseTurn = PLAYER2;
 
         // Declare the winner
-	//mosquitto_loop_stop(mosq, true);
-	//mosquitto_destroy(mosq);
-	//mosquitto_lib_cleanup();
+        //mosquitto_loop_stop(mosq, true);
+        //mosquitto_destroy(mosq);
+        //mosquitto_lib_cleanup();
         declareWinner(whoseTurn);
     }
 }
